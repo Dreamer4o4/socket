@@ -1,6 +1,6 @@
 CC:=gcc -g
-obj:=myworkbench.o
-exe:=myworkbench
+obj:=mywebbench.o
+exe:=mywebbench
 
 
 all:$(exe)

@@ -67,7 +67,7 @@ int main(int argc, char *argv[]){
 }
 
 void help(){
-    printf("myworkbench url time client\n");
+    printf("mywebbench url time client\n");
     printf("time: defult 10s\n");
     printf("client: defult 10\n");
 }
@@ -124,14 +124,14 @@ void build_request(const char *url)
     // printf("Host=%s\n",host);
     strcat(request+strlen(request),url+i+strcspn(url+i,"/"));
 
-    strcat(request," HTTP/1.0\n");
+    strcat(request," HTTP/1.0\r\n");
     // strcat(request," HTTP/1.1");
   
-    strcat(request,"zzzzzzzzzzzzzzzzzzzzzzzzzzzzz\r\n");
+    strcat(request,"User-Agent: zh mywebbench\r\n");
 
-    strcat(request,"\r\n");
     strcat(request,"Host: ");
     strcat(request,host);
+    strcat(request,"\r\n");
     strcat(request,"\r\n");
 }
 
