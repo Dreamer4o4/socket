@@ -1,15 +1,19 @@
 CC:=gcc -g
-obj:=mywebbench.o
+obj:=mywebbench.o bench.o connect2socket.o
 exe:=mywebbench
 
 
 all:$(exe)
 
 $(exe):$(obj)
-	$(CC) $(obj) -o $(exe)
+	$(CC) $(obj) -o $(exe) -lpthread
 
-%.o:%.c
-	$(CC) -c $^ -o $@
+mywebbench.o:mywebbench.h
+bench.o:bench.h
+connect2socket.o:connect2socket.h
+
+# %.o:%.c
+# 	$(CC) -c $^ -o $@
 
 clean:
 	rm -rf $(obj) $(exe)
