@@ -15,6 +15,7 @@ int connect2socket(const char *host, int port){
     char cport[20];
     struct addrinfo hints;
     struct addrinfo *result,*tmp;
+    int err;
 
     sprintf(cport,"%d",port);
 
@@ -27,7 +28,7 @@ int connect2socket(const char *host, int port){
     hints.ai_addr = NULL;
     hints.ai_canonname = NULL;
     hints.ai_next = NULL;
-    if(getaddrinfo(host, cport, &hints, &result) != 0){
+    if((err = getaddrinfo(host, cport, &hints, &result)) != 0){
         fprintf(stderr, "getaddrinfo\n");
         return -1;
     }

@@ -7,6 +7,7 @@ struct bench_info{
     char head[200];
     char host[100];
     int port;
+    char src[20];
     int benchtime;
     int clients;
 };

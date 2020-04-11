@@ -59,19 +59,20 @@ static void *bench_core(void *arg){
     int writelen = strlen(request->head),readlen = 0;
     int sock;
     char buffer[MAX_BUFF];
+    int cnt = 0;
 
+    usleep(500);
     while(1){
+        cnt++;
         sock = connect2socket(request->host,request->port);
         if(sock<0){
             continue;
         }
-
         if(write(sock, request->head, writelen) != writelen){
             addbenchres(FAILED,1);
             close(sock);
             continue;
         }
-
         while((readlen = read(sock, buffer, MAX_BUFF)) > 0){
             addbenchres(BYTES,readlen);
             continue;
@@ -81,8 +82,10 @@ static void *bench_core(void *arg){
         }else{
             addbenchres(SUCCESS,1);
         }
-
-        // printf("buffer:%s\r\n",buffer);
+        
+        printf("pid:%ld time:%d\r\n", pthread_self(), cnt);
+        // printf("write:%s\r\n",request->head);
+        printf("buffer:%s\r\n",buffer);
         close(sock);
     }
 }

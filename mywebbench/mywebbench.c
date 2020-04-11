@@ -6,7 +6,6 @@
 
 #include "mywebbench.h"
 #include "bench.h"
-// #include "connect2socket.h"
 
 static void help(){
     printf("mywebbench url time clients\n");
@@ -23,6 +22,8 @@ static void show_res(struct bench_res arg, int benchtime);
 int main(int argc, char *argv[]){
     struct bench_info request;
     char *url;
+
+    memset(&request, 0, sizeof(struct bench_info));
 
     if(argc>=2 && !strcmp(argv[1],"help")){
         help();
@@ -45,20 +46,12 @@ int main(int argc, char *argv[]){
 }
 
 static int get_request(char *url, struct bench_info *request){
-    char *port = NULL;
-    memset(request->head, 0, sizeof(request->head));
-
-    strcpy(request->head, "GET");
-    strcat(request->head, " ");
-    strcat(request->head, "/");
-    strcat(request->head, " ");
-    strcat(request->head, "HTTP/1.0");
-    strcat(request->head, "\r\n");
-
     if(strncmp(url, "http://", 7) != 0 || !strchr(url+7, '/')){
         errprintf("invaild http URL\n");
     }
     url += 7;
+
+    strcpy(request->src, index(url, '/'));
 
     if(index(url, ':') && index(url, ':') < index(url, '/')){
         strncpy(request->host, url, index(url, ':')-url);
@@ -71,6 +64,14 @@ static int get_request(char *url, struct bench_info *request){
 
         request->port = 80;
     }
+
+    strcpy(request->head, "GET");
+    strcat(request->head, " ");
+    strcat(request->head, request->src);
+    strcat(request->head, " ");
+    strcat(request->head, "HTTP/1.0");
+    strcat(request->head, "\r\n");
+
     strcat(request->head, "Host:");
     strcat(request->head, request->host);
     strcat(request->head, "\r\n");
@@ -90,6 +91,7 @@ static void show_info(struct bench_info request){
     printf("http-head:\n%s\n",request.head);
     printf("host:%s\n",request.host);
     printf("port:%d\n",request.port);
+    printf("src:%s\n",request.src);
     printf("clients:%d\n",request.clients);
     printf("benchtime:%d\n",request.benchtime);
     printf("\r\n\r\n");
