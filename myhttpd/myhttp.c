@@ -146,7 +146,6 @@ static void *program_core(void *arg){
         response(client, OTHERS);
     }
 
-
     close(client.sock);
     fprintf(stderr,"client:%s %s\nrcv:\n%s\n", client.client_host, 
                             client.client_server, buff);
@@ -156,6 +155,7 @@ static void *program_core(void *arg){
 
 static void response(struct client_info info, int type){
     char response[1024];
+    memset(response, 0, 1024);
     time_t t = time(NULL);
 
     if(type == GET){
