@@ -1,6 +1,6 @@
 CC := gcc -g
 exe := myhttp
-obj := myhttp.o
+obj := myhttp.o pth_pool.o
 
 all:$(exe)
 

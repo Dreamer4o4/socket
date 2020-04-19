@@ -1,6 +1,14 @@
 #ifndef _HTTP_
 #define _HTTP_
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 #include <netdb.h>
+#include <unistd.h>
+#include <string.h>
+#include <pthread.h>
+#include <sys/time.h>
 
 #define DEFAULT_PORT "4000"
 #define INFO_SIZE 150
@@ -16,6 +24,10 @@ struct client_info
     char client_server[NI_MAXSERV];
 };
 
-
+static int server_start(const char *port);
+static void server_program(int server);
+static void *program_core(void *arg);
+static void response(struct client_info info, int type);
+static void bad_request(int sock);
 
 #endif

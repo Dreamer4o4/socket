@@ -1,20 +1,10 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <unistd.h>
-#include <string.h>
-#include <pthread.h>
-#include <sys/time.h>
-
 #include "myhttp.h"
+#include "pth_pool.h"
 
-static int server_start(const char *port);
-static void server_program(int server);
-static void *program_core(void *arg);
-static void response(struct client_info info, int type);
-static void bad_request(int sock);
+void *pt(void *arg){
+    sleep(2);
+    printf("%d\n",*((int *)arg));
+}
 
 int main(int argc, char *argv[]){
     char *port = NULL;
@@ -26,15 +16,23 @@ int main(int argc, char *argv[]){
         port = DEFAULT_PORT;
     }
 
-    sock = server_start(port);
-    if(sock < 0){
-        perror("server start failed:");
-        exit(1);
+    int i,t;
+    pth_pool_init(100);
+    while(scanf("%d",&i)!=EOF){
+        if(i == 0)break;
+        for(t=0;t<i;t++){
+            add_task(pt,(void *)(&t));
+        }
     }
+    pth_pool_destory();
 
-    // pth_pool_init();
+    // sock = server_start(port);
+    // if(sock < 0){
+    //     perror("server start failed:");
+    //     exit(1);
+    // }
 
-    server_program(sock);
+    // server_program(sock);
 
     return 0;
 }
