@@ -1,10 +1,11 @@
 #include "myhttp.h"
 #include "pth_pool.h"
 
-void *pt(void *arg){
-    sleep(2);
-    printf("%d\n",*((int *)arg));
-}
+/*  select a work type.
+**  PTH : only pthread
+**  PTH_POOL : prhread pool
+*/
+#define PTH_POOL
 
 int main(int argc, char *argv[]){
     char *port = NULL;
@@ -16,23 +17,21 @@ int main(int argc, char *argv[]){
         port = DEFAULT_PORT;
     }
 
-    int i,t;
+#ifdef  PTH_POOL
     pth_pool_init(100);
-    while(scanf("%d",&i)!=EOF){
-        if(i == 0)break;
-        for(t=0;t<i;t++){
-            add_task(pt,(void *)(&t));
-        }
+#endif
+
+    sock = server_start(port);
+    if(sock < 0){
+        perror("server start failed:");
+        exit(1);
     }
+
+    server_program(sock);
+
+#ifdef  PTH_POOL
     pth_pool_destory();
-
-    // sock = server_start(port);
-    // if(sock < 0){
-    //     perror("server start failed:");
-    //     exit(1);
-    // }
-
-    // server_program(sock);
+#endif
 
     return 0;
 }
@@ -105,19 +104,29 @@ static void server_program(int server){
             strcpy(info.client_server, "unkonw");
         }
 
+#ifdef  PTH
         if(pthread_create(&pid, NULL, program_core, &info) != 0){
             perror("pthread_create:\n");
         }else{
             pthread_detach(pid);
         }
+#endif
+
+#ifdef PTH_POOL
+        add_task(program_core, &info);
+#endif
 
     }
 
-    return; 
+    return ; 
 }
 
 static void *program_core(void *arg){
-    struct client_info client = *(struct client_info *)arg;
+    // struct client_info client = *(struct client_info *)arg;
+    struct client_info client;
+    memset(&client, 0, sizeof(struct client_info));
+    memcpy(&client, arg, sizeof(struct client_info));
+
     char buff[BUFF_SIZE];
     char meth[10];
     int len = 0;

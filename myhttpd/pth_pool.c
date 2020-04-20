@@ -19,7 +19,9 @@ int pth_pool_init(int num){
         memset(info->pth_no, 0, sizeof(pthread_t) * num);
         info->pth_admin = 0;
 
-        if(pthread_mutex_init(&(info->mtx), NULL) != 0 || pthread_cond_init(&(info->ready), NULL) != 0){
+        if(pthread_mutex_init(&(info->task_mtx), NULL) != 0 || 
+            pthread_mutex_init(&(info->pth_mtx), NULL) != 0 || 
+            pthread_cond_init(&(info->ready), NULL) != 0){
             fprintf(stderr, "pthread pool mtx or cond init failed\n");
             break;
         }
@@ -50,7 +52,6 @@ int pth_pool_init(int num){
     
     pth_pool_destory();
     return -1;
-
 }
 
 void pth_pool_destory(){
@@ -68,7 +69,9 @@ void pth_pool_destory(){
         sleep(1);
     }
     free(info->pth_no);
-    pthread_mutex_destroy(&(info->mtx));
+
+    pthread_mutex_destroy(&(info->task_mtx));
+    pthread_mutex_destroy(&(info->pth_mtx));
     pthread_cond_destroy(&(info->ready));
 
     while(info->task_front != NULL){
@@ -82,17 +85,16 @@ void pth_pool_destory(){
     return;
 }
 
-void *work_program(void *arg){
-    fprintf(stderr,"pth id:%ld start\n",pthread_self());
-    pthread_mutex_lock(&(info->mtx));
+static void *work_program(void *arg){
+    pthread_mutex_lock(&(info->pth_mtx));
     info->pth_cur_size++;
-    pthread_mutex_unlock(&(info->mtx));
+    pthread_mutex_unlock(&(info->pth_mtx));
     for(;;){
         struct task *tmp;
 
-        pthread_mutex_lock(&(info->mtx));
+        pthread_mutex_lock(&(info->task_mtx));
         while(info->task_size == 0){
-            pthread_cond_wait(&(info->ready), &(info->mtx));
+            pthread_cond_wait(&(info->ready), &(info->task_mtx));
 
             if(info->del_num == 0 && !info->shutdown){
                 continue;
@@ -101,28 +103,23 @@ void *work_program(void *arg){
                 info->del_num--;
             }
             if(info->pth_cur_size > DEFULT_SIZE || info->shutdown){
+                pthread_mutex_lock(&(info->pth_mtx));
                 info->pth_cur_size--;
-                pthread_mutex_unlock(&(info->mtx));
-                fprintf(stderr,"pth id:%ld end\n",pthread_self());
+                pthread_mutex_unlock(&(info->pth_mtx));
+                pthread_mutex_unlock(&(info->task_mtx));
                 pthread_exit(NULL);
             }
-            
         }
 
         tmp = info->task_front;
         info->task_front = info->task_front->next;
         info->task_size--;
 
-        ///////
-        for(struct task *i = info->task_front;i!=NULL;i=i->next){
-            fprintf(stderr,"task arg:%d",*((int *)i->arg));
-        }
-        fprintf(stderr,"\npth id:%ld arg:%d\n",pthread_self(),*((int *)tmp->arg));
-        ////////
-
-        pthread_mutex_unlock(&(info->mtx));
+        pthread_mutex_unlock(&(info->task_mtx));
 
         (*(tmp->fun))(tmp->arg);
+
+        free(tmp->arg);
         free(tmp);
 
     }
@@ -130,8 +127,7 @@ void *work_program(void *arg){
     pthread_exit(NULL);
 }
 
-void *admin_program(void *arg){
-    fprintf(stderr,"admin id:%ld start\n",pthread_self());
+static void *admin_program(void *arg){
     while(!info->shutdown){
         int num = 0;
         sleep(UPDATE_TIME);
@@ -139,14 +135,14 @@ void *admin_program(void *arg){
             break;
         }
 
-        pthread_mutex_lock(&(info->mtx));
+        pthread_mutex_lock(&(info->pth_mtx));
         fprintf(stderr,"cur pth:%d,cur task:%d\n",info->pth_cur_size,info->task_size);
         if(2 * info->pth_cur_size < info->task_size || info->pth_cur_size < DEFULT_SIZE){
             num = (info->task_size/2 > DEFULT_SIZE)?info->task_size/2:DEFULT_SIZE - info->pth_cur_size;
         }else if(info->pth_cur_size > info->task_size){
             num = (info->task_size > DEFULT_SIZE)?info->task_size:DEFULT_SIZE - info->pth_cur_size;
         }
-        pthread_mutex_unlock(&(info->mtx));
+        pthread_mutex_unlock(&(info->pth_mtx));
 
         if(num > 0){
             for(int i=0,j=0; i<info->pth_max_size && j<num; i++){
@@ -159,16 +155,15 @@ void *admin_program(void *arg){
                 j++;
             }
         }else if(num<0){
-            pthread_mutex_lock(&(info->mtx));
+            pthread_mutex_lock(&(info->pth_mtx));
             info->del_num = -num;
-            pthread_mutex_unlock(&(info->mtx));
+            pthread_mutex_unlock(&(info->pth_mtx));
             for(int i=0; i<-num; i++){
                 pthread_cond_broadcast(&(info->ready));
             }
         }
 
     }
-    fprintf(stderr,"admin id:%ld end\n",pthread_self());
     pthread_exit(NULL);
 }
 
@@ -178,10 +173,11 @@ void add_task(void *(*fun)(void *), void *arg){
     }
     struct task *tmp = (struct task *)malloc(sizeof(struct task));
     tmp->fun = fun;
-    tmp->arg = arg;
+    tmp->arg = NULL;
+    add_task_arg(&tmp->arg, arg);
     tmp->next = NULL;
 
-    pthread_mutex_lock(&(info->mtx));
+    pthread_mutex_lock(&(info->task_mtx));
     if(info->task_size == 0){
         info->task_front = tmp;
         info->task_back = tmp;
@@ -190,19 +186,18 @@ void add_task(void *(*fun)(void *), void *arg){
         info->task_back = info->task_back->next;
     }
     info->task_size++;
+    pthread_mutex_unlock(&(info->task_mtx));
 
-    ///
-    for(struct task *i = info->task_front;i!=NULL;i=i->next){
-        fprintf(stderr,"task arg:%d",*((int *)i->arg));
-    }
-    fprintf(stderr,"end\n");
-    ///
-
-    pthread_mutex_unlock(&(info->mtx));
+    
     pthread_cond_broadcast(&(info->ready));
 }
+  
+static void add_task_arg(void **taskarg,void *arg){
+    *taskarg = (struct client_info *)malloc(sizeof(struct client_info));
+    memcpy(*taskarg, arg, sizeof(struct client_info));
+}
 
-int is_pth_alive(pthread_t pid){
+static int is_pth_alive(pthread_t pid){
     int kill_rc = pthread_kill(pid, 0);
     if (kill_rc == ESRCH) 
     {

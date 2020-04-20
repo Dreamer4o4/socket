@@ -17,7 +17,8 @@ struct pool_info{
     struct task *task_front;
     struct task *task_back;
 
-    pthread_mutex_t mtx;
+    pthread_mutex_t pth_mtx;
+    pthread_mutex_t task_mtx;
     pthread_cond_t ready;
 
     int task_size;
@@ -36,10 +37,11 @@ struct pool_info{
 
 int pth_pool_init(int num);
 void pth_pool_destory();
-void *work_program(void *arg);
-void *admin_program(void *arg);
 void add_task(void*(*fun)(void *), void *arg);
-int is_pth_alive(pthread_t pid);
+static void *work_program(void *arg);
+static void *admin_program(void *arg);
+static void add_task_arg(void **taskarg,void *arg);
+static int is_pth_alive(pthread_t pid);
 
 
 #endif
