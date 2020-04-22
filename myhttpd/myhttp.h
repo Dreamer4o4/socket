@@ -11,8 +11,10 @@
 #include <sys/time.h>
 
 #define DEFAULT_PORT "4000"
-#define INFO_SIZE 150
-#define BUFF_SIZE 1000
+// #define INFO_SIZE 150
+#define BUFF_SIZE 1024
+#define RESP_SIZE 1024
+#define PTH_POOL_SIZE 100
 
 #define GET 0
 #define OTHERS 1

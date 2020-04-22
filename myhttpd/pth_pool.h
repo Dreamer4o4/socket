@@ -4,6 +4,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <errno.h>
+#include <time.h>
 
 
 struct task{

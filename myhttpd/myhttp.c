@@ -4,6 +4,7 @@
 /*  select a work type.
 **  PTH : only pthread
 **  PTH_POOL : prhread pool
+**  EPOLL : IO Multiplexing -- event poll
 */
 #define PTH_POOL
 
@@ -18,7 +19,7 @@ int main(int argc, char *argv[]){
     }
 
 #ifdef  PTH_POOL
-    pth_pool_init(100);
+    pth_pool_init(PTH_POOL_SIZE);
 #endif
 
     sock = server_start(port);
@@ -122,7 +123,6 @@ static void server_program(int server){
 }
 
 static void *program_core(void *arg){
-    // struct client_info client = *(struct client_info *)arg;
     struct client_info client;
     memset(&client, 0, sizeof(struct client_info));
     memcpy(&client, arg, sizeof(struct client_info));
@@ -161,8 +161,8 @@ static void *program_core(void *arg){
 }
 
 static void response(struct client_info info, int type){
-    char response[1024];
-    memset(response, 0, 1024);
+    char response[RESP_SIZE];
+    memset(response, 0, RESP_SIZE);
     time_t t = time(NULL);
 
     if(type == GET){
@@ -203,7 +203,8 @@ static void response(struct client_info info, int type){
 }
 
 static void bad_request(int sock){
-    char response[1024];
+    char response[RESP_SIZE];
+    memset(response, 0, RESP_SIZE);
 
     strcat(response,"HTTP/1.0 400 Bad Request\r\n");
     strcat(response,"Server: httpd/0.1\r\n");

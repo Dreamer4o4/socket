@@ -36,13 +36,9 @@ int pth_pool_init(int num){
         info->task_back = NULL;
 
         for(int i=0; i<DEFULT_SIZE; i++){
-            if(!pthread_create(&(info->pth_no[i]), NULL, work_program, NULL)){
-                pthread_detach(info->pth_no[i]);
-            }
+            pthread_create(&(info->pth_no[i]), NULL, work_program, NULL);
         }
-        if(!pthread_create(&(info->pth_admin), NULL, admin_program, NULL)){
-            pthread_detach(info->pth_admin);
-        }else{
+        if(pthread_create(&(info->pth_admin), NULL, admin_program, NULL) != 0){
             fprintf(stderr, "admin pth create failed\n");
             break;
         }
@@ -86,6 +82,8 @@ void pth_pool_destory(){
 }
 
 static void *work_program(void *arg){
+    pthread_detach(pthread_self());
+
     pthread_mutex_lock(&(info->pth_mtx));
     info->pth_cur_size++;
     pthread_mutex_unlock(&(info->pth_mtx));
@@ -128,6 +126,9 @@ static void *work_program(void *arg){
 }
 
 static void *admin_program(void *arg){
+    pthread_detach(pthread_self());
+    time_t t;
+
     while(!info->shutdown){
         int num = 0;
         sleep(UPDATE_TIME);
@@ -135,14 +136,19 @@ static void *admin_program(void *arg){
             break;
         }
 
-        pthread_mutex_lock(&(info->pth_mtx));
+        t = time(NULL);
+        fprintf(stderr,"time:%s",ctime(&t));
+        // pthread_mutex_lock(&(info->pth_mtx));
         fprintf(stderr,"cur pth:%d,cur task:%d\n",info->pth_cur_size,info->task_size);
+
         if(2 * info->pth_cur_size < info->task_size || info->pth_cur_size < DEFULT_SIZE){
-            num = (info->task_size/2 > DEFULT_SIZE)?info->task_size/2:DEFULT_SIZE - info->pth_cur_size;
-        }else if(info->pth_cur_size > info->task_size){
-            num = (info->task_size > DEFULT_SIZE)?info->task_size:DEFULT_SIZE - info->pth_cur_size;
+            int top = (info->task_size/2 > info->pth_max_size)?info->pth_max_size:info->task_size/2;
+            num = (top > DEFULT_SIZE)?top:DEFULT_SIZE - info->pth_cur_size;
+        }else if(info->pth_cur_size > info->task_size || info->pth_cur_size > info->pth_max_size){
+            int bottom = (info->task_size > DEFULT_SIZE)?info->task_size:DEFULT_SIZE;
+            num = (bottom > info->pth_max_size)?info->pth_max_size:bottom - info->pth_cur_size;
         }
-        pthread_mutex_unlock(&(info->pth_mtx));
+        // pthread_mutex_unlock(&(info->pth_mtx));
 
         if(num > 0){
             for(int i=0,j=0; i<info->pth_max_size && j<num; i++){
