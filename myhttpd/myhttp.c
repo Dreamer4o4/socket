@@ -154,8 +154,8 @@ static void *program_core(void *arg){
     }
 
     close(client.sock);
-    fprintf(stderr,"client:%s %s\nrcv:\n%s\n", client.client_host, 
-                            client.client_server, buff);
+    // fprintf(stderr,"client:%s %s\nrcv:\n%s\n", client.client_host, 
+    //                         client.client_server, buff);
 
     return NULL;
 }
