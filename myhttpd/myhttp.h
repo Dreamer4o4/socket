@@ -9,12 +9,16 @@
 #include <string.h>
 #include <pthread.h>
 #include <sys/time.h>
+#include <sys/epoll.h>
+#include <fcntl.h>
+#include <error.h>
+
 
 #define DEFAULT_PORT "4000"
-// #define INFO_SIZE 150
+#define PTH_POOL_SIZE 10
 #define BUFF_SIZE 1024
 #define RESP_SIZE 1024
-#define PTH_POOL_SIZE 100
+#define EPOLL_SIZE 1024
 
 #define GET 0
 #define OTHERS 1
@@ -31,5 +35,6 @@ static void server_program(int server);
 static void *program_core(void *arg);
 static void response(struct client_info info, int type);
 static void bad_request(int sock);
-
+static void *event_happend(void *arg);
+static int set_no_block(int sock);
 #endif

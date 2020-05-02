@@ -5,6 +5,7 @@
 #include <signal.h>
 #include <errno.h>
 #include <time.h>
+#include <signal.h>
 
 
 struct task{
@@ -33,16 +34,16 @@ struct pool_info{
     int del_num;
 };
 
-#define DEFULT_SIZE 10
+#define MAX_SIZE 10
 #define UPDATE_TIME 5
+#define LIMITED_TASK_SIZE 10240
 
 int pth_pool_init(int num);
 void pth_pool_destory();
 void add_task(void*(*fun)(void *), void *arg);
 static void *work_program(void *arg);
 static void *admin_program(void *arg);
-static void add_task_arg(void **taskarg,void *arg);
-static int is_pth_alive(pthread_t pid);
-
+static void set_signal_exit();
+static void sigint_hander(int signo);
 
 #endif

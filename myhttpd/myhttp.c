@@ -1,12 +1,15 @@
 #include "myhttp.h"
 #include "pth_pool.h"
+#include "log.h"
 
-/*  select a work type.
-**  PTH : only pthread
+/*  
+**  select a work type.
+**  DEFAULT : only pthread
 **  PTH_POOL : prhread pool
 **  EPOLL : IO Multiplexing -- event poll
 */
 #define PTH_POOL
+#define EPOLL
 
 int main(int argc, char *argv[]){
     char *port = NULL;
@@ -18,14 +21,20 @@ int main(int argc, char *argv[]){
         port = DEFAULT_PORT;
     }
 
+    log_init();
+
 #ifdef  PTH_POOL
-    pth_pool_init(PTH_POOL_SIZE);
+    if(pth_pool_init(PTH_POOL_SIZE) != 0){
+        perror("init pth pool failed");
+        // exit(-1);
+        #undef PTH_POOL
+    }
 #endif
 
     sock = server_start(port);
     if(sock < 0){
         perror("server start failed:");
-        exit(1);
+        exit(-2);
     }
 
     server_program(sock);
@@ -88,33 +97,62 @@ static int server_start(const char *port){
 }
 
 static void server_program(int server){
-    struct client_info info;
     struct sockaddr_storage client_addr;
     socklen_t client_addr_len = sizeof(struct sockaddr_storage);
     pthread_t pid = 0;
 
+#ifdef EPOLL
+    pthread_t ep = 0;
+    int epfd = epoll_create(EPOLL_SIZE);
+    if(epfd == -1 || pthread_create(&ep, NULL, event_happend, (void *)(long)epfd) != 0){
+        perror("epoll create failed");
+        exit(-3);
+    }
+#endif
+
     for(;;){
-        // memset(&client_addr, 0, sizeof(struct sockaddr));
-        info.sock = accept(server, (struct sockaddr*)&client_addr, &client_addr_len);
-        if(info.sock < 0){
+        struct client_info *info = (struct client_info *)malloc(sizeof(struct client_info));
+        if(info == NULL){
+            fprintf(stderr, "client info malloc failed\n");
             continue;
         }
 
-        if(getnameinfo((struct sockaddr*)&client_addr, client_addr_len, info.client_host, NI_MAXHOST, info.client_server, NI_MAXSERV, 0) != 0){
-            strcpy(info.client_host, "unkonw");
-            strcpy(info.client_server, "unkonw");
+        info->sock = accept(server, (struct sockaddr*)&client_addr, &client_addr_len);
+        if(info->sock < 0){
+            free(info);
+            info = NULL;
+            continue;
         }
 
-#ifdef  PTH
-        if(pthread_create(&pid, NULL, program_core, &info) != 0){
+        if(getnameinfo((struct sockaddr*)&client_addr, client_addr_len, info->client_host, NI_MAXHOST, info->client_server, NI_MAXSERV, 0) != 0){
+            strcpy(info->client_host, "unkonw");
+            strcpy(info->client_server, "unkonw");
+        }
+
+#ifdef EPOLL
+        if(!set_no_block(info->sock)){
+            close(info->sock);
+            free(info);
+            info = NULL;
+            continue;
+        }
+
+        struct epoll_event ev;
+        ev.events = EPOLLIN | EPOLLET;
+        ev.data.ptr = info;
+        epoll_ctl(epfd, EPOLL_CTL_ADD, info->sock, &ev);
+#else
+
+#ifdef PTH_POOL
+        add_task(program_core, info);
+#else
+        if(pthread_create(&pid, NULL, program_core, info) != 0){
             perror("pthread_create:\n");
         }else{
             pthread_detach(pid);
         }
 #endif
 
-#ifdef PTH_POOL
-        add_task(program_core, &info);
 #endif
 
     }
@@ -122,18 +160,58 @@ static void server_program(int server){
     return ; 
 }
 
+static int set_no_block(int sock){
+    int flags;
+	
+	flags = fcntl(sock, F_GETFL, NULL);
+	if(flags == -1)
+	{
+		fprintf(stderr,"fcntl F_GETFL failed.%s\n", strerror(errno));
+		return 0;
+	}
+ 
+	flags |= O_NONBLOCK;
+ 
+	if(fcntl(sock, F_SETFL, flags) == -1)
+	{
+		fprintf(stderr,"fcntl F_SETFL failed.%s\n", strerror(errno));
+		return 0;
+	}
+
+    return 1;
+}
+
 static void *program_core(void *arg){
     struct client_info client;
     memset(&client, 0, sizeof(struct client_info));
     memcpy(&client, arg, sizeof(struct client_info));
 
+    free(arg);
+    arg = NULL;
+
     char buff[BUFF_SIZE];
     char meth[10];
     int len = 0;
-
+    // int rev_len = 0;
     memset(buff, 0, BUFF_SIZE);
-    len = recv(client.sock, buff, BUFF_SIZE, 0);
-    if(buff[BUFF_SIZE-1] != 0 || (len == BUFF_SIZE && buff[BUFF_SIZE-1] != '\n')){
+    
+    // for(;;){
+    //     rev_len = recv(client.sock, &buff[len], BUFF_SIZE-len, 0);
+    //     // if(rev_len == -1 && errno == EAGAIN && len == 0){
+    //     //     continue;
+    //     // }
+    //     if(rev_len == -1 || (len != 0 && rev_len == 0)){
+    //         break;
+    //     }
+    //     len += rev_len;
+    // }
+    
+    len = recv(client.sock, &buff[len], BUFF_SIZE-len, 0);
+
+    fprintf(stderr,"len:%d REC:\n%s\n",len,buff);
+    if(len == 0)perror("len = 0,error");
+
+    if(len == 0 || (len == BUFF_SIZE && buff[BUFF_SIZE-1] != '\n')){
         bad_request(client.sock);
         return NULL;
     }
@@ -154,11 +232,42 @@ static void *program_core(void *arg){
     }
 
     close(client.sock);
-    // fprintf(stderr,"client:%s %s\nrcv:\n%s\n", client.client_host, 
-    //                         client.client_server, buff);
+
 
     return NULL;
 }
+
+#ifdef EPOLL
+static void *event_happend(void *arg){
+    pthread_detach(pthread_self());
+
+    for(;;){
+        struct epoll_event ev,events[EPOLL_SIZE/10];
+        int num = epoll_wait((long)arg, events, EPOLL_SIZE/10, -1);
+        if(num == -1){
+            continue;
+        }
+
+        for(int i=0; i < num; i++){
+            epoll_ctl((long)arg, EPOLL_CTL_DEL, ((struct client_info *)events[i].data.ptr)->sock,&ev);
+            if(events[i].events & EPOLLIN){
+#ifdef  PTH_POOL
+                add_task(program_core, events[i].data.ptr);
+#else
+                pthread_t pid = 0;
+                if(pthread_create(&pid, NULL, program_core, events[i].data.ptr) != 0){
+                    perror("pthread_create:\n");
+                }else{
+                    pthread_detach(pid);
+                }
+#endif
+            }else{
+                ;
+            }
+        }
+    }
+}
+#endif
 
 static void response(struct client_info info, int type){
     char response[RESP_SIZE];

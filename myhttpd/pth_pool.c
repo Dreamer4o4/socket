@@ -1,9 +1,20 @@
 #include "pth_pool.h"
 #include "myhttp.h"
+#include "log.h"
 
 static struct pool_info *info;
 
+
+/*
+**  VAR_SIZE : the pthread pool size is variable
+*/
+// #define VAR_SIZE
+
 int pth_pool_init(int num){
+    set_signal_exit();
+
+    num = (num>MAX_SIZE)?MAX_SIZE:num;
+
     do{
         info = (struct pool_info *)malloc(sizeof(struct pool_info));
         if(info == NULL){
@@ -35,9 +46,15 @@ int pth_pool_init(int num){
         info->task_front = NULL;
         info->task_back = NULL;
 
-        for(int i=0; i<DEFULT_SIZE; i++){
+#ifdef  VAR_SIZE
+        int start_size = (info->pth_max_size/2);
+#else
+        int start_size = info->pth_max_size;
+#endif
+        for(int i=0; i<start_size; i++){
             pthread_create(&(info->pth_no[i]), NULL, work_program, (void *)(long)i);
         }
+
         if(pthread_create(&(info->pth_admin), NULL, admin_program, NULL) != 0){
             fprintf(stderr, "admin pth create failed\n");
             break;
@@ -60,6 +77,7 @@ void pth_pool_destory(){
     pthread_cond_broadcast(&(info->ready));
 
     while(info->pth_cur_size != 0){
+        fprintf(stderr,"%d pths is exitting\n",info->pth_cur_size);
         sleep(1);
     }
     free(info->pth_no);
@@ -90,6 +108,7 @@ static void *work_program(void *arg){
     pthread_mutex_lock(&(info->pth_mtx));
     info->pth_cur_size++;
     pthread_mutex_unlock(&(info->pth_mtx));
+
     for(;;){
         struct task *tmp;
 
@@ -97,21 +116,22 @@ static void *work_program(void *arg){
         while(info->task_size == 0){
             pthread_cond_wait(&(info->ready), &(info->task_mtx));
 
+            pthread_mutex_lock(&(info->pth_mtx));
             if(info->del_num == 0 && !info->shutdown){
+                pthread_mutex_unlock(&(info->pth_mtx));
                 continue;
             }
             if(info->del_num != 0){
-                pthread_mutex_lock(&(info->pth_mtx));
                 info->del_num--;
-                pthread_mutex_unlock(&(info->pth_mtx));
             }
-            if(info->pth_cur_size >= DEFULT_SIZE || info->shutdown){
-                pthread_mutex_lock(&(info->pth_mtx));
+            if(info->pth_cur_size >= (info->pth_max_size/2) || info->shutdown){
                 info->pth_cur_size--;
                 info->pth_no[(long)arg] = 0;
                 pthread_mutex_unlock(&(info->pth_mtx));
                 pthread_mutex_unlock(&(info->task_mtx));
                 pthread_exit(NULL);
+            }else{
+                pthread_mutex_unlock(&(info->pth_mtx));
             }
         }
 
@@ -119,12 +139,16 @@ static void *work_program(void *arg){
         info->task_front = info->task_front->next;
         info->task_size--;
 
+        fprintf(stderr,"%ld do work,cur size %d\n",pthread_self(),info->task_size);
+        // log_write("%ld do work,cur size %d \n",pthread_self(),info->task_size);
+
         pthread_mutex_unlock(&(info->task_mtx));
 
         (*(tmp->fun))(tmp->arg);
 
-        free(tmp->arg);
-        tmp->arg = NULL;
+        fprintf(stderr,"%ld work finished\n",pthread_self());
+        // log_write("%ld work finished\n",pthread_self());
+
         free(tmp);
         tmp = NULL;
 
@@ -135,6 +159,7 @@ static void *work_program(void *arg){
 
 static void *admin_program(void *arg){
     pthread_detach(pthread_self());
+    
     time_t t;
 
     while(!info->shutdown){
@@ -146,21 +171,23 @@ static void *admin_program(void *arg){
 
         t = time(NULL);
         fprintf(stderr,"time:%s",ctime(&t));
-        // pthread_mutex_lock(&(info->pth_mtx));
-        // pthread_mutex_lock(&(info->task_mtx));
+        pthread_mutex_lock(&(info->pth_mtx));
+        pthread_mutex_lock(&(info->task_mtx));
         fprintf(stderr,"cur pth:%d,cur task:%d\n",info->pth_cur_size,info->task_size);
 
-        if(2 * info->pth_cur_size < info->task_size || info->pth_cur_size < DEFULT_SIZE){
+#ifdef  VAR_SIZE
+        if(2 * info->pth_cur_size < info->task_size || info->pth_cur_size < (info->pth_max_size/2)){
             int top = (info->task_size/2 > info->pth_max_size)?(info->pth_max_size):(info->task_size/2);
-            num = ((top > DEFULT_SIZE)?top:DEFULT_SIZE) - info->pth_cur_size;
+            num = ((top > (info->pth_max_size/2))?top:(info->pth_max_size/2)) - info->pth_cur_size;
         }else if(info->pth_cur_size > info->task_size || info->pth_cur_size > info->pth_max_size){
-            int bottom = (info->task_size > DEFULT_SIZE)?(info->task_size):(DEFULT_SIZE);
+            int bottom = (info->task_size > (info->pth_max_size/2))?(info->task_size):((info->pth_max_size/2));
             num = ((bottom > info->pth_max_size)?info->pth_max_size:bottom) - info->pth_cur_size;
         }
-        // pthread_mutex_unlock(&(info->task_mtx));
-        // pthread_mutex_unlock(&(info->pth_mtx));
+#endif
+        pthread_mutex_unlock(&(info->task_mtx));
+        pthread_mutex_unlock(&(info->pth_mtx));
 
-
+#ifdef  VAR_SIZE
         if(num > 0){
             for(int i=0,j=0; i<info->pth_max_size && j<num; i++){
                 if(info->pth_no[i] == 0){
@@ -175,20 +202,33 @@ static void *admin_program(void *arg){
             pthread_mutex_unlock(&(info->pth_mtx));
             pthread_cond_broadcast(&(info->ready));
         }
+#endif
 
     }
     pthread_exit(NULL);
 }
 
 void add_task(void *(*fun)(void *), void *arg){
-    if(info->shutdown){
+    do{
+        if(info->shutdown){
+            fprintf(stderr,"no pth pool exist\n");
+        }else if(info->task_size > LIMITED_TASK_SIZE){
+            fprintf(stderr,"too many task to do\n");
+        }else{
+            break;
+        }
+        return ;
+    }while(0);
+    
+    struct task *tmp = (struct task *)malloc(sizeof(struct task));
+    if(info == NULL){
+        fprintf(stderr, "add task malloc failed\n");
         return;
     }
-    struct task *tmp = (struct task *)malloc(sizeof(struct task));
     tmp->fun = fun;
-    tmp->arg = NULL;
-    add_task_arg(&tmp->arg, arg);
+    tmp->arg = arg;
     tmp->next = NULL;
+
 
     pthread_mutex_lock(&(info->task_mtx));
     if(info->task_size == 0){
@@ -201,10 +241,25 @@ void add_task(void *(*fun)(void *), void *arg){
     info->task_size++;
     pthread_mutex_unlock(&(info->task_mtx));
 
-    pthread_cond_broadcast(&(info->ready));
+    pthread_cond_signal(&(info->ready));
 }
-  
-static void add_task_arg(void **taskarg,void *arg){
-    *taskarg = (struct client_info *)malloc(sizeof(struct client_info));
-    memcpy(*taskarg, arg, sizeof(struct client_info));
+
+
+static void set_signal_exit(){
+    struct sigaction sa;
+
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sa.sa_handler = sigint_hander;
+
+    if(sigaction(SIGINT, &sa, NULL) == -1){
+        fprintf(stderr,"set SIGINT sigaction failed\n");
+        exit(-1);
+    }
+}
+
+static void sigint_hander(int signo){
+    pth_pool_destory();
+    fprintf(stderr,"exit httpd pth_pool version.\n");
+    exit(0);
 }
