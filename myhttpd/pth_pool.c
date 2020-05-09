@@ -1,3 +1,14 @@
+#include <pthread.h>
+#include <signal.h>
+#include <errno.h>
+#include <time.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <string.h>
+#include <unistd.h>
+
 #include "pth_pool.h"
 #include "myhttp.h"
 #include "log.h"
@@ -11,7 +22,6 @@ static struct pool_info *info;
 // #define VAR_SIZE
 
 int pth_pool_init(int num){
-    set_signal_exit();
 
     num = (num>MAX_SIZE)?MAX_SIZE:num;
 
@@ -109,6 +119,8 @@ static void *work_program(void *arg){
     info->pth_cur_size++;
     pthread_mutex_unlock(&(info->pth_mtx));
 
+    int exit_flag = 0;
+
     for(;;){
         struct task *tmp;
 
@@ -127,12 +139,16 @@ static void *work_program(void *arg){
             if(info->pth_cur_size >= (info->pth_max_size/2) || info->shutdown){
                 info->pth_cur_size--;
                 info->pth_no[(long)arg] = 0;
-                pthread_mutex_unlock(&(info->pth_mtx));
-                pthread_mutex_unlock(&(info->task_mtx));
-                pthread_exit(NULL);
-            }else{
-                pthread_mutex_unlock(&(info->pth_mtx));
+                exit_flag = 1;
             }
+            pthread_mutex_unlock(&(info->pth_mtx));
+            if(exit_flag){
+                break;
+            }
+        }
+        if(exit_flag){
+            pthread_mutex_unlock(&(info->task_mtx));
+            break;
         }
 
         tmp = info->task_front;
@@ -154,7 +170,6 @@ static void *work_program(void *arg){
 
     }
 
-    pthread_exit(NULL);
 }
 
 static void *admin_program(void *arg){
@@ -205,7 +220,6 @@ static void *admin_program(void *arg){
 #endif
 
     }
-    pthread_exit(NULL);
 }
 
 void add_task(void *(*fun)(void *), void *arg){
@@ -242,24 +256,4 @@ void add_task(void *(*fun)(void *), void *arg){
     pthread_mutex_unlock(&(info->task_mtx));
 
     pthread_cond_signal(&(info->ready));
-}
-
-
-static void set_signal_exit(){
-    struct sigaction sa;
-
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
-    sa.sa_handler = sigint_hander;
-
-    if(sigaction(SIGINT, &sa, NULL) == -1){
-        fprintf(stderr,"set SIGINT sigaction failed\n");
-        exit(-1);
-    }
-}
-
-static void sigint_hander(int signo){
-    pth_pool_destory();
-    fprintf(stderr,"exit httpd pth_pool version.\n");
-    exit(0);
 }

@@ -2,11 +2,6 @@
 #define _POOL_
 
 #include <pthread.h>
-#include <signal.h>
-#include <errno.h>
-#include <time.h>
-#include <signal.h>
-
 
 struct task{
     void *(*fun)(void *);
@@ -43,7 +38,5 @@ void pth_pool_destory();
 void add_task(void*(*fun)(void *), void *arg);
 static void *work_program(void *arg);
 static void *admin_program(void *arg);
-static void set_signal_exit();
-static void sigint_hander(int signo);
 
 #endif

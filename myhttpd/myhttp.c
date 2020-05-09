@@ -1,3 +1,16 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <unistd.h>
+#include <string.h>
+#include <pthread.h>
+#include <sys/time.h>
+#include <sys/epoll.h>
+#include <fcntl.h>
+#include <errno.h>
+
 #include "myhttp.h"
 #include "pth_pool.h"
 #include "log.h"
@@ -21,12 +34,11 @@ int main(int argc, char *argv[]){
         port = DEFAULT_PORT;
     }
 
-    log_init();
+    log_start();
 
 #ifdef  PTH_POOL
     if(pth_pool_init(PTH_POOL_SIZE) != 0){
         perror("init pth pool failed");
-        // exit(-1);
         #undef PTH_POOL
     }
 #endif
@@ -46,7 +58,7 @@ int main(int argc, char *argv[]){
     return 0;
 }
 
-static int server_start(const char *port){
+int server_start(const char *port){
     int sock, optval = 1;
     struct addrinfo hint;
     struct addrinfo *res, *tmp;
@@ -97,67 +109,137 @@ static int server_start(const char *port){
 }
 
 static void server_program(int server){
-    struct sockaddr_storage client_addr;
-    socklen_t client_addr_len = sizeof(struct sockaddr_storage);
-    pthread_t pid = 0;
 
 #ifdef EPOLL
-    pthread_t ep = 0;
+
+    int epfd = epoll_init(server);
+
+    for(;;){
+        struct epoll_event ev,events[EPOLL_SIZE];
+        int num = epoll_wait((long)epfd, events, EPOLL_SIZE, -1);
+        if(num == -1){
+            continue;
+        }
+
+        for(int i=0; i < num; i++){
+            if((events[i].events & EPOLLIN) && ((struct client_info *)events[i].data.ptr)->sock == server){
+                
+                struct client_info *info = get_accept_client_info(server);
+                if(info == NULL){
+                    continue;
+                }
+
+                add_info_into_epoll(epfd, info);
+            
+            }else if(events[i].events & EPOLLIN){
+
+                epoll_ctl((long)epfd, EPOLL_CTL_DEL, ((struct client_info *)events[i].data.ptr)->sock, &ev);
+
+                pth_work(events[i].data.ptr);
+
+            }else if(events[i].events & EPOLLOUT){
+                ;
+            }else{
+                ;
+            }
+
+        }
+    }
+
+    close(epfd);
+
+    free(listen_info);
+    listen_info = NULL;
+
+#else
+
+    for(;;){
+
+        struct client_info *info = get_accept_client_info(server);
+
+        pth_work(info);
+
+    }
+
+#endif
+
+}
+
+static struct client_info *listen_info = NULL;
+static int epoll_init(int listen_fd){
     int epfd = epoll_create(EPOLL_SIZE);
-    if(epfd == -1 || pthread_create(&ep, NULL, event_happend, (void *)(long)epfd) != 0){
+
+    if(epfd == -1){
         perror("epoll create failed");
         exit(-3);
     }
-#endif
+    
+    struct client_info *info = (struct client_info *)malloc(sizeof(struct client_info));
+    memset(info, 0, sizeof(struct client_info));
+    info->sock = listen_fd;
+    listen_info = info;
 
-    for(;;){
-        struct client_info *info = (struct client_info *)malloc(sizeof(struct client_info));
-        if(info == NULL){
-            fprintf(stderr, "client info malloc failed\n");
-            continue;
-        }
-
-        info->sock = accept(server, (struct sockaddr*)&client_addr, &client_addr_len);
-        if(info->sock < 0){
-            free(info);
-            info = NULL;
-            continue;
-        }
-
-        if(getnameinfo((struct sockaddr*)&client_addr, client_addr_len, info->client_host, NI_MAXHOST, info->client_server, NI_MAXSERV, 0) != 0){
-            strcpy(info->client_host, "unkonw");
-            strcpy(info->client_server, "unkonw");
-        }
-
-#ifdef EPOLL
-        if(!set_no_block(info->sock)){
-            close(info->sock);
-            free(info);
-            info = NULL;
-            continue;
-        }
-
-        struct epoll_event ev;
-        ev.events = EPOLLIN | EPOLLET;
-        ev.data.ptr = info;
-        epoll_ctl(epfd, EPOLL_CTL_ADD, info->sock, &ev);
-#else
-
-#ifdef PTH_POOL
-        add_task(program_core, info);
-#else
-        if(pthread_create(&pid, NULL, program_core, info) != 0){
-            perror("pthread_create:\n");
-        }else{
-            pthread_detach(pid);
-        }
-#endif
-
-#endif
-
+    struct epoll_event ev;
+    ev.events = EPOLLIN;
+    ev.data.ptr = info;
+    if(epoll_ctl(epfd, EPOLL_CTL_ADD, info->sock, &ev) == -1){
+        perror("epoll add listen fd failed");
+        exit(-4);
     }
 
-    return ; 
+    return epfd;
+}
+
+static struct client_info *get_accept_client_info(int listen_fd){
+    struct sockaddr_storage client_addr;
+    socklen_t client_addr_len = sizeof(struct sockaddr_storage);
+
+    struct client_info *info = (struct client_info *)malloc(sizeof(struct client_info));
+    if(info == NULL){
+        fprintf(stderr, "client info malloc failed\n");
+        return NULL;
+    }
+
+    info->sock = accept(listen_fd, (struct sockaddr*)&client_addr, &client_addr_len);
+    if(info->sock < 0){
+        free(info);
+        info = NULL;
+        return NULL;
+    }
+
+    if(getnameinfo((struct sockaddr*)&client_addr, client_addr_len, info->client_host, NI_MAXHOST, info->client_server, NI_MAXSERV, 0) != 0){
+        strcpy(info->client_host, "unkonw");
+        strcpy(info->client_server, "unkonw");
+    }
+
+    return info;
+}
+
+static void pth_work(void *data){
+#ifdef  PTH_POOL
+    add_task(program_core, data);
+#else
+    pthread_t pid = 0;
+    if(pthread_create(&pid, NULL, program_core, data) != 0){
+        perror("pthread_create:\n");
+    }else{
+        pthread_detach(pid);
+    }
+#endif
+}
+
+static void add_info_into_epoll(int epfd, struct client_info *info){
+    if(!set_no_block(info->sock)){
+        close(info->sock);
+        free(info);
+        info = NULL;
+        return;
+    }
+
+    struct epoll_event ev;
+    ev.events = EPOLLIN | EPOLLET;
+    ev.data.ptr = info;
+    epoll_ctl(epfd, EPOLL_CTL_ADD, info->sock, &ev);
 }
 
 static int set_no_block(int sock){
@@ -192,24 +274,18 @@ static void *program_core(void *arg){
     char buff[BUFF_SIZE];
     char meth[10];
     int len = 0;
-    // int rev_len = 0;
+    int rev_len = 0;
     memset(buff, 0, BUFF_SIZE);
     
-    // for(;;){
-    //     rev_len = recv(client.sock, &buff[len], BUFF_SIZE-len, 0);
-    //     // if(rev_len == -1 && errno == EAGAIN && len == 0){
-    //     //     continue;
-    //     // }
-    //     if(rev_len == -1 || (len != 0 && rev_len == 0)){
-    //         break;
-    //     }
-    //     len += rev_len;
-    // }
-    
+#ifdef EPOLL
+    while((rev_len = recv(client.sock, &buff[len], BUFF_SIZE-len, 0)) > 0){
+        len += rev_len;
+    }
+#else
     len = recv(client.sock, &buff[len], BUFF_SIZE-len, 0);
-
+#endif
+    
     fprintf(stderr,"len:%d REC:\n%s\n",len,buff);
-    if(len == 0)perror("len = 0,error");
 
     if(len == 0 || (len == BUFF_SIZE && buff[BUFF_SIZE-1] != '\n')){
         bad_request(client.sock);
@@ -236,38 +312,6 @@ static void *program_core(void *arg){
 
     return NULL;
 }
-
-#ifdef EPOLL
-static void *event_happend(void *arg){
-    pthread_detach(pthread_self());
-
-    for(;;){
-        struct epoll_event ev,events[EPOLL_SIZE/10];
-        int num = epoll_wait((long)arg, events, EPOLL_SIZE/10, -1);
-        if(num == -1){
-            continue;
-        }
-
-        for(int i=0; i < num; i++){
-            epoll_ctl((long)arg, EPOLL_CTL_DEL, ((struct client_info *)events[i].data.ptr)->sock,&ev);
-            if(events[i].events & EPOLLIN){
-#ifdef  PTH_POOL
-                add_task(program_core, events[i].data.ptr);
-#else
-                pthread_t pid = 0;
-                if(pthread_create(&pid, NULL, program_core, events[i].data.ptr) != 0){
-                    perror("pthread_create:\n");
-                }else{
-                    pthread_detach(pid);
-                }
-#endif
-            }else{
-                ;
-            }
-        }
-    }
-}
-#endif
 
 static void response(struct client_info info, int type){
     char response[RESP_SIZE];

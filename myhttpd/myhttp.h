@@ -1,18 +1,7 @@
 #ifndef _HTTP_
 #define _HTTP_
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <unistd.h>
-#include <string.h>
-#include <pthread.h>
-#include <sys/time.h>
-#include <sys/epoll.h>
-#include <fcntl.h>
-#include <error.h>
 
+#include <netdb.h>
 
 #define DEFAULT_PORT "4000"
 #define PTH_POOL_SIZE 10
@@ -30,11 +19,16 @@ struct client_info
     char client_server[NI_MAXSERV];
 };
 
-static int server_start(const char *port);
+static struct client_info *listen_info;
+
+int server_start(const char *port);
 static void server_program(int server);
 static void *program_core(void *arg);
 static void response(struct client_info info, int type);
 static void bad_request(int sock);
-static void *event_happend(void *arg);
 static int set_no_block(int sock);
+static int epoll_init(int listen_fd);
+static struct client_info *get_accept_client_info(int listen_fd);
+static void pth_work(void *data);
+static void add_info_into_epoll(int epfd, struct client_info *info);
 #endif
