@@ -24,20 +24,22 @@ int log_start(){
         prctl(PR_SET_NAME, "myhttp-log", NULL, NULL, NULL);
 
         sock = log_init();
-        if(sock < 0){
+        if(sock <= 0){
             return -1;
         }
 
         log_program(sock);
 
     }else{
+        sleep(1);
+
         log_pid = pid;
 
         char host[] = "localhost";
         int port = atoi(LOG_PORT);
         sock_ = connect2socket(host, port);
 
-        if(sock_ < 0){
+        if(sock_ <= 0){
             return -1;
         }
 
@@ -124,6 +126,8 @@ int print_with_log(const char *formate, ...){
     va_end(args);
 
     fprintf(stderr, "%s", s);
-    write_to_log(s, sizeof(s));
+    if(sock_ != 0){
+        write_to_log(s, sizeof(s));
+    }
 
 }

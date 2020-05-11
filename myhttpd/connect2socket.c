@@ -21,8 +21,7 @@ int connect2socket(const char *host, int port){
 
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_flags = AI_NUMERICSERV;
-    // hints.ai_family = AF_UNSPEC;  //error:AF_UNSPEC
-    hints.ai_family = AF_INET; 
+    hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = 0;
     hints.ai_addrlen = 0;
