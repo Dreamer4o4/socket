@@ -27,13 +27,15 @@ int pth_pool_init(int num){
     do{
         info = (struct pool_info *)malloc(sizeof(struct pool_info));
         if(info == NULL){
-            fprintf(stderr, "pthread pool info malloc failed\n");
+            // fprintf(stderr, "pthread pool info malloc failed\n");
+            print_with_log("pthread pool info malloc failed\n");
             break;
         }
 
         info->pth_no = (pthread_t *)malloc(sizeof(pthread_t) * num);
         if(info->pth_no == NULL){
-            fprintf(stderr, "pthread pool pth_no malloc failed\n");
+            // fprintf(stderr, "pthread pool pth_no malloc failed\n");
+            print_with_log("pthread pool pth_no malloc failed\n");
             break;
         }
         memset(info->pth_no, 0, sizeof(pthread_t) * num);
@@ -42,7 +44,8 @@ int pth_pool_init(int num){
         if(pthread_mutex_init(&(info->task_mtx), NULL) != 0 || 
             pthread_mutex_init(&(info->pth_mtx), NULL) != 0 || 
             pthread_cond_init(&(info->ready), NULL) != 0){
-            fprintf(stderr, "pthread pool mtx or cond init failed\n");
+            // fprintf(stderr, "pthread pool mtx or cond init failed\n");
+            print_with_log("pthread pool mtx or cond init failed\n");
             break;
         }
 
@@ -65,7 +68,8 @@ int pth_pool_init(int num){
         }
 
         if(pthread_create(&(info->pth_admin), NULL, admin_program, NULL) != 0){
-            fprintf(stderr, "admin pth create failed\n");
+            // fprintf(stderr, "admin pth create failed\n");
+            print_with_log("admin pth create failed\n");
             break;
         }
 
@@ -86,7 +90,8 @@ void pth_pool_destory(){
     pthread_cond_broadcast(&(info->ready));
 
     while(info->pth_cur_size != 0){
-        fprintf(stderr,"%d pths is exitting\n",info->pth_cur_size);
+        // fprintf(stderr,"%d pths is exitting\n",info->pth_cur_size);
+        print_with_log("%d pths is exitting\n", info->pth_cur_size);
         sleep(1);
     }
     free(info->pth_no);
@@ -155,12 +160,14 @@ static void *work_program(void *arg){
         info->task_size--;
 
         fprintf(stderr,"%ld do work,cur size %d\n",pthread_self(),info->task_size);
+        // print_with_log("%ld do work,cur size %d\n", pthread_self(), info->task_size);
 
         pthread_mutex_unlock(&(info->task_mtx));
 
         (*(tmp->fun))(tmp->arg);
 
         fprintf(stderr,"%ld work finished\n",pthread_self());
+        // print_with_log("%ld work finished\n", pthread_self());
 
         free(tmp);
         tmp = NULL;
@@ -182,10 +189,12 @@ static void *admin_program(void *arg){
         }
 
         t = time(NULL);
-        fprintf(stderr,"time:%s",ctime(&t));
+        // fprintf(stderr,"time:%s",ctime(&t));
+        print_with_log("time:%s", ctime(&t));
         pthread_mutex_lock(&(info->pth_mtx));
         pthread_mutex_lock(&(info->task_mtx));
-        fprintf(stderr,"cur pth:%d,cur task:%d\n",info->pth_cur_size,info->task_size);
+        // fprintf(stderr,"cur pth:%d,cur task:%d\n",info->pth_cur_size,info->task_size);
+        print_with_log("cur pth:%d,cur task:%d\n", info->pth_cur_size, info->task_size);
 
 #ifdef  VAR_SIZE
         if(2 * info->pth_cur_size < info->task_size || info->pth_cur_size < (info->pth_max_size/2)){
@@ -223,8 +232,10 @@ void add_task(void *(*fun)(void *), void *arg){
     do{
         if(info->shutdown){
             fprintf(stderr,"no pth pool exist\n");
+            print_with_log("no pth pool exist\n");
         }else if(info->task_size > LIMITED_TASK_SIZE){
-            fprintf(stderr,"too many task to do\n");
+            // fprintf(stderr,"too many task to do\n");
+            print_with_log("too many task to do\n");
         }else{
             break;
         }
@@ -233,7 +244,8 @@ void add_task(void *(*fun)(void *), void *arg){
     
     struct task *tmp = (struct task *)malloc(sizeof(struct task));
     if(info == NULL){
-        fprintf(stderr, "add task malloc failed\n");
+        // fprintf(stderr, "add task malloc failed\n");
+        print_with_log("add task malloc failed\n");
         return;
     }
     tmp->fun = fun;

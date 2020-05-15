@@ -25,14 +25,16 @@ int main(int argc, char *argv[]){
 
 #ifdef  PTH_POOL
     if(pth_pool_init(PTH_POOL_SIZE) != 0){
-        perror("init pth pool failed");
+        // perror("init pth pool failed");
+        print_with_log("init pth pool failed\r\n");
         #undef PTH_POOL
     }
 #endif
 
     sock = server_start(port);
     if(sock < 0){
-        perror("server start failed:");
+        // perror("server start failed:");
+        print_with_log("server start failed\r\n");
         exit(-2);
     }
 
@@ -107,7 +109,7 @@ static void response(struct client_info info, int type){
         strcat(response,"HTTP/1.0 501 Method Not Implemented\r\n");
     }
 
-    strcat(response,"Server: httpd/0.1\r\n");
+    strcat(response,"Server: zhttp\r\n");
     strcat(response,"Content-Type: text/html\r\n");
     strcat(response,"\r\n");
     strcat(response,"<HTML>\r\n");

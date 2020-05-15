@@ -19,6 +19,7 @@ static int bytes = 0;
 #define BYTES   3
 
 pthread_mutex_t bench_mtx = PTHREAD_MUTEX_INITIALIZER;
+static int shutdown = 0;
 
 static void *bench_core(void *arg);
 static int getbenchres(int type);
@@ -46,6 +47,7 @@ struct bench_res bench(struct bench_info request){
     }
     
     sleep(request.benchtime);
+    shutdown = 1;
 
     res.success = getbenchres(SUCCESS);
     res.failed = getbenchres(FAILED);
@@ -62,7 +64,7 @@ static void *bench_core(void *arg){
     int cnt = 0;
 
     usleep(500);
-    while(1){
+    while(!shutdown){
         cnt++;
         sock = connect2socket(request->host,request->port);
         if(sock<0){

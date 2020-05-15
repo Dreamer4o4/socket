@@ -14,6 +14,7 @@
 #include "server.h"
 #include "myhttp.h"
 #include "pth_pool.h"
+#include "log.h"
 
 static struct client_info *listen_info = NULL;
 
@@ -33,7 +34,8 @@ int server_start(const char *port){
     hint.ai_canonname = NULL;
     hint.ai_next = NULL;
     if(getaddrinfo(NULL, port, &hint, &res) != 0){
-        perror("getaddrinfo:");
+        // perror("getaddrinfo:");
+        print_with_log("getaddrinfo failed\r\n");
         return -1;
     }
 
@@ -131,7 +133,8 @@ static struct client_info *get_accept_client_info(int listen_fd){
 
     struct client_info *info = (struct client_info *)malloc(sizeof(struct client_info));
     if(info == NULL){
-        fprintf(stderr, "client info malloc failed\n");
+        // fprintf(stderr, "client info malloc failed\n");
+        print_with_log("client info malloc failed\n");
         return NULL;
     }
 
@@ -155,7 +158,8 @@ static int epoll_init(int listen_fd){
     int epfd = epoll_create(EPOLL_SIZE);
 
     if(epfd == -1){
-        perror("epoll create failed");
+        // perror("epoll create failed");
+        print_with_log("epoll create failed\n");
         exit(-3);
     }
     
@@ -168,7 +172,8 @@ static int epoll_init(int listen_fd){
     ev.events = EPOLLIN;
     ev.data.ptr = info;
     if(epoll_ctl(epfd, EPOLL_CTL_ADD, info->sock, &ev) == -1){
-        perror("epoll add listen fd failed");
+        // perror("epoll add listen fd failed");
+        print_with_log("epoll add listen fd failed\n");
         exit(-4);
     }
 
@@ -195,7 +200,8 @@ static int set_no_block(int sock){
 	flags = fcntl(sock, F_GETFL, NULL);
 	if(flags == -1)
 	{
-		fprintf(stderr,"fcntl F_GETFL failed.%s\n", strerror(errno));
+		// fprintf(stderr,"fcntl F_GETFL failed.%s\n", strerror(errno));
+        print_with_log("fcntl F_GETFL failed.%s\n", strerror(errno));
 		return 0;
 	}
  
@@ -203,7 +209,8 @@ static int set_no_block(int sock){
  
 	if(fcntl(sock, F_SETFL, flags) == -1)
 	{
-		fprintf(stderr,"fcntl F_SETFL failed.%s\n", strerror(errno));
+		// fprintf(stderr,"fcntl F_SETFL failed.%s\n", strerror(errno));
+        print_with_log("fcntl F_SETFL failed.%s\n", strerror(errno));
 		return 0;
 	}
 
@@ -216,7 +223,8 @@ static void pth_work(void *data, void *(*program_core)(void *)){
 #else
     pthread_t pid = 0;
     if(pthread_create(&pid, NULL, program_core, data) != 0){
-        perror("pthread_create:\n");
+        // perror("pthread_create:\n");
+        print_with_log("pthread_create failed\r\n");
     }else{
         pthread_detach(pid);
     }
