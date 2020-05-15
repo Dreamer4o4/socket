@@ -21,7 +21,7 @@ int main(int argc, char *argv[]){
         port = DEFAULT_PORT;
     }
 
-    // log_start();
+    log_start();
 
 #ifdef  PTH_POOL
     if(pth_pool_init(PTH_POOL_SIZE) != 0){
