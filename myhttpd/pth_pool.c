@@ -67,11 +67,13 @@ int pth_pool_init(int num){
             pthread_create(&(info->pth_no[i]), NULL, work_program, (void *)(long)i);
         }
 
+#ifdef  VAR_SIZE
         if(pthread_create(&(info->pth_admin), NULL, admin_program, NULL) != 0){
             // fprintf(stderr, "admin pth create failed\n");
             print_with_log("admin pth create failed\n");
             break;
         }
+#endif
 
         return 0;
     }while(0);
@@ -132,6 +134,7 @@ static void *work_program(void *arg){
         while(info->task_size == 0){
             pthread_cond_wait(&(info->ready), &(info->task_mtx));
 
+#ifdef  VAR_SIZE
             pthread_mutex_lock(&(info->pth_mtx));
             if(info->del_num == 0 && !info->shutdown){
                 pthread_mutex_unlock(&(info->pth_mtx));
@@ -149,6 +152,13 @@ static void *work_program(void *arg){
             if(exit_flag){
                 break;
             }
+#else
+            if(info->shutdown){
+                exit_flag = 1;
+                break;
+            }
+#endif  
+
         }
         if(exit_flag){
             pthread_mutex_unlock(&(info->task_mtx));
@@ -159,10 +169,10 @@ static void *work_program(void *arg){
         info->task_front = info->task_front->next;
         info->task_size--;
 
-        fprintf(stderr,"%ld do work,cur size %d\n",pthread_self(),info->task_size);
-        // print_with_log("%ld do work,cur size %d\n", pthread_self(), info->task_size);
-
         pthread_mutex_unlock(&(info->task_mtx));
+
+        fprintf(stderr,"%ld do work\n",pthread_self());
+        // print_with_log("%ld do work\n", pthread_self());
 
         (*(tmp->fun))(tmp->arg);
 
@@ -191,8 +201,10 @@ static void *admin_program(void *arg){
         t = time(NULL);
         // fprintf(stderr,"time:%s",ctime(&t));
         print_with_log("time:%s", ctime(&t));
+
         pthread_mutex_lock(&(info->pth_mtx));
         pthread_mutex_lock(&(info->task_mtx));
+        
         // fprintf(stderr,"cur pth:%d,cur task:%d\n",info->pth_cur_size,info->task_size);
         print_with_log("cur pth:%d,cur task:%d\n", info->pth_cur_size, info->task_size);
 
@@ -231,7 +243,7 @@ static void *admin_program(void *arg){
 void add_task(void *(*fun)(void *), void *arg){
     do{
         if(info->shutdown){
-            fprintf(stderr,"no pth pool exist\n");
+            // fprintf(stderr,"no pth pool exist\n");
             print_with_log("no pth pool exist\n");
         }else if(info->task_size > LIMITED_TASK_SIZE){
             // fprintf(stderr,"too many task to do\n");

@@ -33,7 +33,7 @@ struct client_info
 static struct client_info *listen_info;
 
 static void *program_core(void *arg);
-static void response(struct client_info info, int type);
+static void response(struct client_info *info, int type);
 static void bad_request(int sock);
 
 #endif

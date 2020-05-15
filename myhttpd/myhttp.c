@@ -21,7 +21,7 @@ int main(int argc, char *argv[]){
         port = DEFAULT_PORT;
     }
 
-    log_start();
+    // log_start();
 
 #ifdef  PTH_POOL
     if(pth_pool_init(PTH_POOL_SIZE) != 0){
@@ -48,12 +48,7 @@ int main(int argc, char *argv[]){
 }
 
 static void *program_core(void *arg){
-    struct client_info client;
-    memset(&client, 0, sizeof(struct client_info));
-    memcpy(&client, arg, sizeof(struct client_info));
-
-    free(arg);
-    arg = NULL;
+    struct client_info *client = (struct client_info *)arg;
 
     char buff[BUFF_SIZE];
     char meth[10];
@@ -62,18 +57,18 @@ static void *program_core(void *arg){
     memset(buff, 0, BUFF_SIZE);
     
 #ifdef EPOLL
-    while((rev_len = recv(client.sock, &buff[len], BUFF_SIZE-len, 0)) > 0){
+    while((rev_len = recv(client->sock, &buff[len], BUFF_SIZE-len, 0)) > 0){
         len += rev_len;
     }
 #else
-    len = recv(client.sock, &buff[len], BUFF_SIZE-len, 0);
+    len = recv(client->sock, &buff[len], BUFF_SIZE-len, 0);
 #endif
     
     fprintf(stderr,"len:%d REC:\n%s\n",len,buff);
     // print_with_log("len:%d REC:\n%s\n",len,buff);
 
     if(len == 0 || (len == BUFF_SIZE && buff[BUFF_SIZE-1] != '\n')){
-        bad_request(client.sock);
+        bad_request(client->sock);
         return NULL;
     }
 
@@ -92,13 +87,16 @@ static void *program_core(void *arg){
         response(client, OTHERS);
     }
 
-    close(client.sock);
+    close(client->sock);
 
+    arg = NULL;
+    free(client);
+    client = NULL;
 
     return NULL;
 }
 
-static void response(struct client_info info, int type){
+static void response(struct client_info *info, int type){
     char response[RESP_SIZE];
     memset(response, 0, RESP_SIZE);
     time_t t = time(NULL);
@@ -135,10 +133,10 @@ static void response(struct client_info info, int type){
     strcat(response,"<BODY>\r\n");
     strcat(response,"<h2>Client Info</h2>\r\n");
     strcat(response,"<p>");
-    strcat(response,info.client_host);
+    strcat(response,info->client_host);
     strcat(response,"</p>\r\n");
     strcat(response,"<p>");
-    strcat(response,info.client_server);
+    strcat(response,info->client_server);
     strcat(response,"</p>\r\n");
     strcat(response,"<p>");
     strcat(response,ctime(&t));
@@ -147,7 +145,7 @@ static void response(struct client_info info, int type){
 
     strcat(response,"</HTML>\r\n");
 
-    write(info.sock, response, strlen(response));
+    write(info->sock, response, strlen(response));
     
     return ;
 }
@@ -157,7 +155,7 @@ static void bad_request(int sock){
     memset(response, 0, RESP_SIZE);
 
     strcat(response,"HTTP/1.0 400 Bad Request\r\n");
-    strcat(response,"Server: httpd/0.1\r\n");
+    strcat(response,"Server: zhttp\r\n");
     strcat(response,"Content-Type: text/html\r\n");
     strcat(response,"\r\n");
 
