@@ -10,7 +10,6 @@
 #include <unistd.h>
 
 #include "pth_pool.h"
-#include "myhttp.h"
 #include "log.h"
 
 static struct pool_info *info;
@@ -156,14 +155,12 @@ static void *work_program(void *arg){
         info->task_size--;
 
         fprintf(stderr,"%ld do work,cur size %d\n",pthread_self(),info->task_size);
-        // log_write("%ld do work,cur size %d \n",pthread_self(),info->task_size);
 
         pthread_mutex_unlock(&(info->task_mtx));
 
         (*(tmp->fun))(tmp->arg);
 
         fprintf(stderr,"%ld work finished\n",pthread_self());
-        // log_write("%ld work finished\n",pthread_self());
 
         free(tmp);
         tmp = NULL;

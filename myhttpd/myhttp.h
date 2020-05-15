@@ -3,6 +3,17 @@
 
 #include <netdb.h>
 
+
+/*  
+**  select a work type.
+**  DEFAULT : only pthread
+**  PTH_POOL : prhread pool
+**  EPOLL : IO Multiplexing -- event poll
+*/
+#define PTH_POOL
+#define EPOLL
+
+
 #define DEFAULT_PORT "4000"
 #define PTH_POOL_SIZE 10
 #define BUFF_SIZE 1024
@@ -21,14 +32,8 @@ struct client_info
 
 static struct client_info *listen_info;
 
-int server_start(const char *port);
-static void server_program(int server);
 static void *program_core(void *arg);
 static void response(struct client_info info, int type);
 static void bad_request(int sock);
-static int set_no_block(int sock);
-static int epoll_init(int listen_fd);
-static struct client_info *get_accept_client_info(int listen_fd);
-static void pth_work(void *data);
-static void add_info_into_epoll(int epfd, struct client_info *info);
+
 #endif

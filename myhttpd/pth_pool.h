@@ -36,6 +36,8 @@ struct pool_info{
 int pth_pool_init(int num);
 void pth_pool_destory();
 void add_task(void*(*fun)(void *), void *arg);
+
+
 static void *work_program(void *arg);
 static void *admin_program(void *arg);
 

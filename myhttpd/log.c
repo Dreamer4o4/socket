@@ -9,7 +9,7 @@
 #include <stdlib.h>
 
 #include "log.h"
-#include "myhttp.h"
+#include "server.h"
 #include "connect2socket.h"
 
 static pid_t log_pid = 0;
