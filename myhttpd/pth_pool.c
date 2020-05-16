@@ -255,7 +255,7 @@ void add_task(void *(*fun)(void *), void *arg){
     }while(0);
     
     struct task *tmp = (struct task *)malloc(sizeof(struct task));
-    if(info == NULL){
+    if(tmp == NULL){
         // fprintf(stderr, "add task malloc failed\n");
         print_with_log("add task malloc failed\n");
         return;

@@ -25,7 +25,7 @@ struct pool_info{
     pthread_t *pth_no;
     pthread_t pth_admin;
     
-    int shutdown;
+    volatile int shutdown;
     int del_num;
 };
 
