@@ -240,7 +240,7 @@ static void *admin_program(void *arg){
     }
 }
 
-void add_task(void *(*fun)(void *), void *arg){
+int add_task(void *(*fun)(void *), void *arg){
     do{
         if(info->shutdown){
             // fprintf(stderr,"no pth pool exist\n");
@@ -251,14 +251,14 @@ void add_task(void *(*fun)(void *), void *arg){
         }else{
             break;
         }
-        return ;
+        return -1;
     }while(0);
     
     struct task *tmp = (struct task *)malloc(sizeof(struct task));
     if(tmp == NULL){
         // fprintf(stderr, "add task malloc failed\n");
         print_with_log("add task malloc failed\n");
-        return;
+        return -2;
     }
     tmp->fun = fun;
     tmp->arg = arg;
@@ -277,4 +277,6 @@ void add_task(void *(*fun)(void *), void *arg){
     pthread_mutex_unlock(&(info->task_mtx));
 
     pthread_cond_signal(&(info->ready));
+
+    return 0;
 }

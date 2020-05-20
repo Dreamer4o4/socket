@@ -15,7 +15,7 @@
 
 
 #define DEFAULT_PORT "4000"
-#define PTH_POOL_SIZE 8
+#define PTH_POOL_SIZE 1
 #define BUFF_SIZE 1024
 #define RESP_SIZE 1024
 #define EPOLL_SIZE 1024

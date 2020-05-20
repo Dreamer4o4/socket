@@ -31,11 +31,11 @@ struct pool_info{
 
 #define MAX_SIZE 10
 #define UPDATE_TIME 5
-#define LIMITED_TASK_SIZE 10240
+#define LIMITED_TASK_SIZE 10000
 
 int pth_pool_init(int num);
 void pth_pool_destory();
-void add_task(void*(*fun)(void *), void *arg);
+int add_task(void*(*fun)(void *), void *arg);
 
 
 static void *work_program(void *arg);

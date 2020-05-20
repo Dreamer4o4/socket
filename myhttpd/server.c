@@ -219,7 +219,10 @@ static int set_no_block(int sock){
 
 static void pth_work(void *data, void *(*program_core)(void *)){
 #ifdef  PTH_POOL
-    add_task(program_core, data);
+    if(add_task(program_core, data) != 0){
+        close( ((struct client_info *)data)->sock );
+        free( ((struct client_info *)data) );
+    }
 #else
     pthread_t pid = 0;
     if(pthread_create(&pid, NULL, program_core, data) != 0){
