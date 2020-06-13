@@ -171,12 +171,12 @@ static void *work_program(void *arg){
 
         pthread_mutex_unlock(&(info->task_mtx));
 
-        fprintf(stderr,"%ld do work\n",pthread_self());
+        // fprintf(stderr,"%ld do work\n",pthread_self());
         // print_with_log("%ld do work\n", pthread_self());
 
         (*(tmp->fun))(tmp->arg);
 
-        fprintf(stderr,"%ld work finished\n",pthread_self());
+        // fprintf(stderr,"%ld work finished\n",pthread_self());
         // print_with_log("%ld work finished\n", pthread_self());
 
         free(tmp);

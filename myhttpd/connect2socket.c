@@ -29,7 +29,7 @@ int connect2socket(const char *host, int port){
     hints.ai_canonname = NULL;
     hints.ai_next = NULL;
     if((err = getaddrinfo(host, cport, &hints, &result)) != 0){
-        fprintf(stderr, "getaddrinfo\n");
+        fprintf(stderr, "getaddrinfo failed\n");
         return -1;
     }
 

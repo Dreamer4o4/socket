@@ -35,9 +35,15 @@ struct pool_info{
 
 int pth_pool_init(int num);
 void pth_pool_destory();
+
+/*
+**  add task into task queue
+*/
 int add_task(void*(*fun)(void *), void *arg);
 
-
+/*
+**  two types pthread function  
+*/
 static void *work_program(void *arg);
 static void *admin_program(void *arg);
 

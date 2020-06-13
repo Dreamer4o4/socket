@@ -21,7 +21,7 @@ int main(int argc, char *argv[]){
         port = DEFAULT_PORT;
     }
 
-    log_start();
+    // log_start();
 
 #ifdef  PTH_POOL
     if(pth_pool_init(PTH_POOL_SIZE) != 0){
@@ -64,7 +64,7 @@ static void *program_core(void *arg){
     len = recv(client->sock, &buff[len], BUFF_SIZE-len, 0);
 #endif
     
-    fprintf(stderr,"len:%d REC:\n%s\n",len,buff);
+    // fprintf(stderr,"len:%d REC:\n%s\n",len,buff);
     // print_with_log("len:%d REC:\n%s\n",len,buff);
 
     if(len == 0 || (len == BUFF_SIZE && buff[BUFF_SIZE-1] != '\n')){
