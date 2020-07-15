@@ -2,7 +2,7 @@
 refer to WebBench
 
 # myhttpd
-refer to Tinnyhttpd           
+refer to Tinyhttpd           
 reactor + thread_pool       
 
 ## myhttpd bench result
